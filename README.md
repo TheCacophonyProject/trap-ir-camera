@@ -32,6 +32,10 @@ master_port: 4508
 
 `LABEL=cp /media/cp auto auto,nofail,noexec,nodev,noatime,nodiratime,umask=000 0 2`
 
+https://linuxize.com/post/how-to-install-opencv-on-raspberry-pi/
+https://pypi.org/project/imutils/
+
+
 `apt-get install python-systemd python3-systemd`
 
 - Copy over files `scp ./ir-camera* pi@trap-ir-<id>.local:` and `scp ./requirements.txt pi@trap-ir-<id>.local:`
