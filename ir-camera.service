@@ -1,0 +1,12 @@
+[Unit]
+Description=Cacophony Project IR recorder
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/home/pi/ir-camera-2.py
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

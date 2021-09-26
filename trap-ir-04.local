@@ -22,7 +22,7 @@ RES_X = 640
 RES_Y = 480
 HOSTNAME = socket.gethostname()
 MAX_DISK_USAGE = 80
-RECORDING_LENGTH_SECONDS = 60
+RECORDING_LENGTH_SECONDS = 300
 MAX_DISK_USAGE_PRECENT = 80
 
 def make_file_name(datetime, camera_name):
@@ -94,12 +94,12 @@ cameras = [
         'camera': cv2.VideoCapture(0),
         'frame': None,
         'writer': None,
-    },
-    {
-        'name': "2",
-        'camera': cv2.VideoCapture(2),
-        'frame': None,
-        'writer': None,
+#    },
+#    {
+#        'name': "2",
+#        'camera': cv2.VideoCapture(2),
+#        'frame': None,
+#        'writer': None,
     }]
     
 
@@ -111,8 +111,8 @@ for camera in cameras:
     camera['camera'].set(cv2.CAP_PROP_FOURCC, codec)
     #camera['camera'].set(cv2.CAP_PROP_FOURCC, cv2.CV_FOURCC('M', 'J', 'P', 'G'))
     _, _ = camera['camera'].read()
-fourcc = cv2.VideoWriter_fourcc(*'XVID')
-#fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+#fourcc = cv2.VideoWriter_fourcc(*'XVID')
+fourcc = cv2.VideoWriter_fourcc(*'MJPG')
 log.info("done")
 
 
@@ -130,13 +130,12 @@ while True:
     start_time = time.time()
     frames = []
     for camera in cameras:
-        _, _ = camera['camera'].read()
         read = False
         while read == False:    
             read, f = camera['camera'].read()
         frames.append(f)
     vis = np.concatenate(frames, axis=0)
-    cv2.imwrite(os.path.join(STILL_DIR, 'out.png'), vis)
+    cv2.imwrite('out.png')
 
     while True:
         for camera in cameras:
