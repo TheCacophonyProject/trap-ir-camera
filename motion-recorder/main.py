@@ -13,6 +13,7 @@ from datetime import datetime
 import glob
 import collections
 import time
+import subprocess
 
 motion = Motion()
 
@@ -33,7 +34,6 @@ recording = False
 usb_dir = '/media/cp'
 video_dir = os.path.join(usb_dir, 'videos')
 still_dir = '/var/spool/cptv'
-framerate = 16
 h264_ext = ".h264"
 mp4_ext = ".mp4"
 resolution = (640,480)
@@ -82,7 +82,7 @@ def delete_other_files():
 
 # Check if USB is properly mounted
 log.info("checking USB is mounted....")
-if not os.path.isdir(usb_dir):
+if usb_dir not in subprocess.check_output('df').decode('utf-8'):
     log.info(f"USB not mounted at {usb_dir}")
     sys.exit(f"USB not mounted at {usb_dir}")
 log.info("done")
@@ -90,6 +90,10 @@ log.info("done")
 os.makedirs(video_dir, exist_ok=True)
 os.makedirs(still_dir, exist_ok=True)
 log.info("Starting video capture")
+
+
+
+frame_count = 0
 while True:
     returned, frame = cap.read()
     if not returned:
@@ -99,7 +103,7 @@ while True:
     #print(frame.size)
     motion.process_frame(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY))
     
-    if not recording and motion.motion:
+    if not recording: # and motion.motion:
         out_file = get_out_file()
         log.info(f"Starting new recording: {out_file}")
         writer = cv2.VideoWriter(out_file, fourcc, fps, (width, height))
@@ -108,12 +112,14 @@ while True:
         for f in buffer:
             writer.write(f)
         buffer.clear()
-    elif recording and not motion.motion:
+    elif frame_count > fps * 120: ##recording and not motion.motion
         log.info("Stopping recording")
         writer.release()
         recording = False
+        frame_count = 0
 
     if recording:
+        frame_count += 1
         writer.write(frame)
     else:
         buffer.append(frame)
