@@ -34,6 +34,14 @@ class API:
         self._token = self._get_jwt(user, password)
         self._auth_header = {"Authorization": self._token}
 
+    def reprocess(self, recording_id):
+
+        r = requests.get(
+            self.api_url + f"/reprocess/{recording_id}",
+            headers=self._auth_header,
+        )
+        r.raise_for_status()
+
     def tag_recording(self, recording_id, what):
         tag = {}
         tag["what"] = what

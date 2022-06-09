@@ -116,6 +116,9 @@ def main():
     global api
 
     api = API(args.server, args.user, args.password)
+    # print("reprocessing")
+    # api.reprocess(237584)
+    # return
     if args.source.is_file():
         init_worker(api)
         process(args.source)
@@ -149,63 +152,72 @@ def init_worker(api_p):
 
 
 def process(source):
-    global api
-    cursor = conn.cursor()
-    cursor.execute(f'SELECT "id" FROM "Recordings" where "rawFileKey" = \'{source}\'')
-    data = cursor.fetchone()
-    recording_id = data[0]
-    cursor.close()
-    logging.info(source)
-    # meta = load_meta(source)
-    if meta is not None:
-        recording_id = meta["id"]
-        for tag in meta["tags"]:
-            if tag.get("what") == NO_MOTION:
-                logging.info("Already tagged as no motion %s", meta["id"])
-                return
-    logging.info("Processing %s", recording_id)
-    motion = Motion()
-    vidcap = cv2.VideoCapture(str(source))
-    frame_number = 0
-    m = None
-    motions = []
-    recording = False
-    while True:
-        success, image = vidcap.read()
-        if not success:
-            break
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        motion.process_frame(gray)
-        if not recording and motion.motion:
-            m = MotionLogger(frame_number)
-            logging.info("Motion detected %s", frame_number)
-            recording = True
-        elif recording and not motion.motion:
-            logging.info("Motion Stopped")
+    try:
+        global api
+        cursor = conn.cursor()
+        cursor.execute(
+            f'SELECT "id" FROM "Recordings" where "rawFileKey" = \'{source}\''
+        )
+        data = cursor.fetchone()
+        if data is None:
+            logging.error("couldnt find db entry for %s", source)
+            cursor.close()
+            return
+        recording_id = data[0]
+        cursor.close()
+        logging.info(source)
+        # meta = load_meta(source)
+        if meta is not None:
+            recording_id = meta["id"]
+            for tag in meta["tags"]:
+                if tag.get("what") == NO_MOTION:
+                    logging.info("Already tagged as no motion %s", meta["id"])
+                    return
+        logging.info("Processing %s", recording_id)
+        motion = Motion()
+        vidcap = cv2.VideoCapture(str(source))
+        frame_number = 0
+        m = None
+        motions = []
+        recording = False
+        while True:
+            success, image = vidcap.read()
+            if not success:
+                break
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            motion.process_frame(gray)
+            if not recording and motion.motion:
+                m = MotionLogger(frame_number)
+                logging.info("Motion detected %s", frame_number)
+                recording = True
+            elif recording and not motion.motion:
+                logging.info("Motion Stopped")
+                m.stop(frame_number)
+                motions.append(m)
+                recording = False
+                m = None
+
+            # if motion.motion_count > 0:
+            # cv2.imshow(f"background", motion.background.get())
+            # cv2.imshow("frame", gray)
+            # cv2.moveWindow(f"background", 0, 0)
+            # cv2.moveWindow(f"frame", 0, 480)
+            #
+            # cv2.waitKey()
+
+            frame_number += 1
+        if m is not None:
             m.stop(frame_number)
             motions.append(m)
-            recording = False
-            m = None
 
-        # if motion.motion_count > 0:
-        # cv2.imshow(f"background", motion.background.get())
-        # cv2.imshow("frame", gray)
-        # cv2.moveWindow(f"background", 0, 0)
-        # cv2.moveWindow(f"frame", 0, 480)
-        #
-        # cv2.waitKey()
+        if len(motions) == 0:
+            logging.info("tagging no motion")
+            api.tag_recording(recording_id, NO_MOTION)
 
-        frame_number += 1
-    if m is not None:
-        m.stop(frame_number)
-        motions.append(m)
-
-    if len(motions) == 0:
-        logging.info("tagging no motion")
-        api.tag_recording(recording_id, NO_MOTION)
-
-    for m in motions:
-        logging.info("Motion %s ", m)
+        # for m in motions:
+        #     logging.info("Motion %s ", m)
+    except:
+        logging.error("Error processing %s", source, exc_info=True)
 
 
 if __name__ == "__main__":
