@@ -155,25 +155,29 @@ def process(source):
     try:
         global api
         cursor = conn.cursor()
+        raw_key = str(source)
+        raw_key = raw_key.replace("/data/noise/", "")
+
         cursor.execute(
-            f'SELECT "id" FROM "Recordings" where "rawFileKey" = \'{source}\''
+            f'SELECT "id" FROM "Recordings" where "rawFileKey" = \'{raw_key}\''
         )
         data = cursor.fetchone()
         if data is None:
-            logging.error("couldnt find db entry for %s", source)
+            logging.error("couldnt find db entry for %s", raw_key)
             cursor.close()
             return
         recording_id = data[0]
         cursor.close()
         logging.info(source)
         # meta = load_meta(source)
+        meta = None
         if meta is not None:
             recording_id = meta["id"]
             for tag in meta["tags"]:
                 if tag.get("what") == NO_MOTION:
                     logging.info("Already tagged as no motion %s", meta["id"])
                     return
-        logging.info("Processing %s", recording_id)
+        logging.info("Processing %s with id %s", source, recording_id)
         motion = Motion()
         vidcap = cv2.VideoCapture(str(source))
         frame_number = 0
