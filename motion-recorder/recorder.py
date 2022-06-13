@@ -5,6 +5,7 @@ from logs import init_logging
 from datetime import datetime
 import socket
 import logging
+from thermalconfig import ThermalConfig
 
 USB_DIR = "/home/gp/"
 VIDEO_DIR = os.path.join(USB_DIR, "videos")
@@ -50,6 +51,7 @@ class Recorder:
         self.res_y = res_y
         self.writer = None
         self.length = 0
+        self.config = ThermalConfig.load_from_file()
 
     def close(self):
         if self.recording:
@@ -62,7 +64,7 @@ class Recorder:
 
         if not self.recording and motion:
             self.length = 0
-            out_file = get_out_file()
+            out_file = self.get_out_file()
             logging.info(f"Starting new recording: {out_file}")
             self.writer = cv2.VideoWriter(
                 out_file, FOURCC, FPS, (self.res_x, self.res_y)
@@ -71,9 +73,9 @@ class Recorder:
             cv2.imwrite(os.path.join(STILL_DIR, "still.png"), frame)
             previews = self.motion_detector.preview_frames.get_frames()
             logging.info("got %s previews", len(previews))
+            self.writer.write(self.motion_detector.background.background)
             for f in previews:
                 self.writer.write(f)
-            # buffer.clear()
         elif (self.recording and not motion and self.length > MIN_FRAMES) or (
             self.length >= MAX_FRAMES
         ):
@@ -84,8 +86,7 @@ class Recorder:
             self.writer.write(frame)
             self.length += 1
 
-
-def get_out_file():
-    date_str = datetime.now().strftime("%Y-%m-%d_%H.%M.%S")
-    file_name = f"{date_str}_{HOSTNAME}.avi"
-    return os.path.join(VIDEO_DIR, file_name)
+    def get_out_file(self):
+        date_str = datetime.now().strftime("%Y-%m-%d_%H.%M.%S")
+        file_name = f"{date_str}_{HOSTNAME}_{self.config.device.device_id}.avi"
+        return os.path.join(VIDEO_DIR, file_name)
