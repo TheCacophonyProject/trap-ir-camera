@@ -72,7 +72,6 @@ class Recorder:
             self.recording = True
             cv2.imwrite(os.path.join(STILL_DIR, "still.png"), frame)
             previews = self.motion_detector.preview_frames.get_frames()
-            logging.info("got %s previews", len(previews))
             self.writer.write(self.motion_detector.background.background)
             for f in previews:
                 self.writer.write(f)

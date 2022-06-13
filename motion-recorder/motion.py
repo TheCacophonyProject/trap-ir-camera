@@ -12,32 +12,34 @@ class Background:
     # update pixels which have shown no movement for 200 frames
     def __init__(self):
         self.background = None
-        self.background_weight = None
+        # self.background_weight = None
         self.frames = 0
 
-    def process_frame(self, frame, thresh):
+    def process_frame(self, frame):
         self.frames += 1
+
         if self.background is None:
             self.background = frame.copy()
-            self.background_weight = np.zeros((frame.shape), dtype=np.float32)
+            # self.background_weight = np.zeros((frame.shape), dtype=np.float32)
             return
-
-        indices = np.where(thresh == 0)
-        self.background_weight = np.where(
-            thresh == 0,
-            self.background_weight + 1,
-            0,
-        )
-        self.background = np.where(
-            self.background_weight > Background.STILL_FOR,
-            frame,
-            self.background,
-        )
-        self.background = np.uint8(self.background)
-        self.background_weight[self.background_weight > Background.STILL_FOR] -= (
-            Background.STILL_FOR / 4.0
-        )
-        np.clip(self.background_weight, a_min=0, a_max=None)
+        self.background = np.minimum(self.background, frame)
+        #
+        # indices = np.where(thresh == 0)
+        # self.background_weight = np.where(
+        #     thresh == 0,
+        #     self.background_weight + 1,
+        #     0,
+        # )
+        # self.background = np.where(
+        #     self.background_weight > Background.STILL_FOR,
+        #     frame,
+        #     self.background,
+        # )
+        # self.background = np.uint8(self.background)
+        # self.background_weight[self.background_weight > Background.STILL_FOR] -= (
+        #     Background.STILL_FOR / 4.0
+        # )
+        # np.clip(self.background_weight, a_min=0, a_max=None)
 
 
 class SlidingWindow:
@@ -106,12 +108,12 @@ class Motion:
             self.preview_frames_grey.oldest, frame
         )  # Get delta from current frame and background
         threshold = cv2.threshold(delta, 25, 255, cv2.THRESH_BINARY)[1]
-        self.background.process_frame(frame, threshold)
 
         erosion_image = cv2.erode(threshold, self.get_kernel())
         erosion_pixels = len(erosion_image[erosion_image > 0])
         # to do find a value that suites the number of pixesl we want to move
         self.preview_frames_grey.add(frame)
+        self.background.process_frame(frame)
 
         # Calculate if there was motion in the current frame
         # TODO Chenage how much ioldests added to the motion_count depending on how big the motion is
