@@ -79,18 +79,11 @@ def init_logging(timestamps=False):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-s",
-        "--server",
-        default="https://api-ir.cacophony.org.nz",
-        help="API server URL",
-    )
+
     parser.add_argument(
         "source",
         help='a Mp4/avi file to process, or a folder name, or "all" for all files within subdirectories of source folder.',
     )
-    parser.add_argument("user", help="API server username")
-    parser.add_argument("password", help="API server password")
     args = parser.parse_args()
     args.source = Path(args.source)
     return args
@@ -113,16 +106,12 @@ def load_meta(file):
 def main():
     q_listener, q = logger_init()
     args = parse_args()
-    global api
-
-    api = API(args.server, args.user, args.password)
-    # print("reprocessing")
-    # api.reprocess(237584)
-    # return
+    print(args.source.is_file())
     if args.source.is_file():
-        init_worker(api)
+        print("Is file")
+        print("running", args.source)
         process(args.source)
-
+        return
     file_paths = []
     for folder_path, _, files in os.walk(str(args.source)):
         for name in files:
@@ -130,53 +119,21 @@ def main():
                 full_path = os.path.join(folder_path, name)
                 file_paths.append(Path(full_path))
     file_paths.sort()
-    with Pool(processes=4, initializer=init_worker, initargs=(api,)) as pool:
+    with Pool(processes=4) as pool:
         pool.map(process, file_paths)
     q_listener.stop()
 
 
-api = None
-conn = None
-
-
-def init_worker(api_p):
-    global api
-    api = api_p
-    global conn
-    conn = psycopg2.connect(
-        database="cacodb",
-        host="localhost",
-        user="user10",
-        password="password",
-    )
-
-
 def process(source):
     try:
-        global api
-        cursor = conn.cursor()
-        raw_key = str(source)
-        raw_key = raw_key.replace("/data/noise/", "")
-
-        cursor.execute(
-            f'SELECT "id" FROM "Recordings" where "rawFileKey" = \'{raw_key}\''
-        )
-        data = cursor.fetchone()
-        if data is None:
-            logging.error("couldnt find db entry for %s", raw_key)
-            cursor.close()
-            return
-        recording_id = data[0]
-        cursor.close()
         logging.info(source)
-        # meta = load_meta(source)
-        meta = None
+        meta = load_meta(source)
         if meta is not None:
-            recording_id = meta["id"]
-            for tag in meta["tags"]:
+            recording_id = meta.get("id")
+            for tag in meta.get("tags", []):
                 if tag.get("what") == NO_MOTION:
                     logging.info("Already tagged as no motion %s", meta["id"])
-                    return
+                    # return
         logging.info("Processing %s with id %s", source, recording_id)
         motion = Motion()
         vidcap = cv2.VideoCapture(str(source))
@@ -215,11 +172,10 @@ def process(source):
             motions.append(m)
 
         if len(motions) == 0:
-            logging.info("tagging no motion")
-            api.tag_recording(recording_id, NO_MOTION)
+            logging.info("no motion")
 
-        # for m in motions:
-        #     logging.info("Motion %s ", m)
+        for m in motions:
+            logging.info("Motion %s ", m)
     except:
         logging.error("Error processing %s", source, exc_info=True)
 
