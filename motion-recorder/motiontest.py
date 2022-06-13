@@ -145,8 +145,8 @@ def process(source):
             success, image = vidcap.read()
             if not success:
                 break
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            motion.process_frame(gray)
+            # gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            motion.process_frame(image)
             if not recording and motion.motion:
                 m = MotionLogger(frame_number)
                 logging.info("Motion detected %s", frame_number)
@@ -173,7 +173,8 @@ def process(source):
 
         if len(motions) == 0:
             logging.info("no motion")
-
+        cv2.imshow("background", motion.background.background)
+        cv2.waitKey()
         for m in motions:
             logging.info("Motion %s ", m)
     except:

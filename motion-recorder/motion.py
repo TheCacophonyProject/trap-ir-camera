@@ -7,105 +7,63 @@ import logging
 
 
 class Background:
-    BACKGROUND_WEIGHT_ADD = 0.01
-
+    BACKGROUND_WEIGHT_ADD = 0.001
+    STILL_FOR = 200
+    # update pixels which have shown no movement for 200 frames
     def __init__(self):
         self.background = None
         self.background_weight = None
         self.frames = 0
 
-    def process_frame(self, frame):
+    def process_frame(self, frame, thresh):
         self.frames += 1
         if self.background is None:
-            self.background = frame
+            self.background = frame.copy()
             self.background_weight = np.zeros((frame.shape), dtype=np.float32)
             return
-        # new backgound is a rolling minimum of frames per pixel,
-        # i.e. if frame[0][0]  - self.background_weight[0][0] < self.background[0][0]
-        #  background[0][0]  = frame[0][0]
-        # else
-        #  background[0][0] remains unchanged and background_weight[0][0] is added too
-        # this forces a change every now and again
-        new_background = np.where(
-            self.background < frame - self.background_weight,
-            self.background,
-            frame,
-        )
-        # update weighting
+
+        indices = np.where(thresh == 0)
         self.background_weight = np.where(
-            self.background < frame - self.background_weight,
-            self.background_weight + Background.BACKGROUND_WEIGHT_ADD,
+            thresh == 0,
+            self.background_weight + 1,
             0,
         )
+        self.background = np.where(
+            self.background_weight > Background.STILL_FOR,
+            frame,
+            self.background,
+        )
+        self.background = np.uint8(self.background)
+        self.background_weight[self.background_weight > Background.STILL_FOR] -= (
+            Background.STILL_FOR / 4.0
+        )
+        np.clip(self.background_weight, a_min=0, a_max=None)
 
 
 class SlidingWindow:
     def __init__(self, size):
-        self.lock = Lock()
         # might not need lock
+        self.frame_len = size
         self.frames = [None] * size
-        self.last_index = None
-        self.size = len(self.frames)
-        self.oldest_index = None
+        self.i = 0
 
-    def update_current_frame(self, frame):
-        with self.lock:
-            if self.last_index is None:
-                self.oldest_index = 0
-                self.last_index = 0
-            self.frames[self.last_index] = frame
-
-    @property
-    def current(self):
-        with self.lock:
-            if self.last_index is not None:
-                return self.frames[self.last_index]
-            return None
-
-    def get_frames(self):
-        with self.lock:
-            if self.last_index is None:
-                return []
-            frames = []
-            cur = self.oldest_index
-            end_index = (self.last_index + 1) % self.size
-            while len(frames) == 0 or cur != end_index:
-                frames.append(self.frames[cur])
-                cur = (cur + 1) % self.size
-            return frames
-
-    def get(self, i=None):
-        if i is None:
-            return self.current()
-        i = i % self.size
-        with self.lock:
-            return self.frames[i]
+    def add(self, frame):
+        self.frames[self.i] = frame
+        self.i += 1
+        self.i = self.i % self.frame_len
 
     @property
     def oldest(self):
-        with self.lock:
-            if self.oldest_index is not None:
-                return self.frames[self.oldest_index]
-            return None
+        return self.frames[self.i]
 
-    def add(self, frame):
-        with self.lock:
-            if self.last_index is None:
-                # init
-                self.oldest_index = 0
-                self.frames[0] = frame
-                self.last_index = 0
-            else:
-                new_index = (self.last_index + 1) % self.size
-                if new_index == self.oldest_index:
-                    self.oldest_index = (self.oldest_index + 1) % self.size
-                self.frames[new_index] = frame
-                self.last_index = new_index
-
-    def reset(self):
-        with self.lock:
-            self.last_index = None
-            self.oldest_index = None
+    def get_frames(self):
+        frames = []
+        cur = self.i
+        # end_index = (cur + 1) % self.frame_len
+        while len(frames) == 0 or cur != self.i:
+            frames.append(self.frames[cur])
+            cur = (cur + 1) % self.frame_len
+        return frames
 
 
 FPS = 10
@@ -115,6 +73,8 @@ WINDOW_SIZE = 5 * FPS
 class Motion:
     def __init__(self):
         self.preview_frames = SlidingWindow(WINDOW_SIZE)
+        self.preview_frames_grey = SlidingWindow(WINDOW_SIZE)
+
         self.background = Background()
         self.kernel_trigger = np.ones(
             (15, 15), "uint8"
@@ -122,9 +82,7 @@ class Motion:
         self.kernel_recording = np.ones(
             (10, 10), "uint8"
         )  # kernel for erosion when recording
-        self.motion = (
-            False  # If there is currently considered to be motion in the video
-        )
+        self.motion = False
         self.motion_count = 0
         self.show = False
 
@@ -136,29 +94,33 @@ class Motion:
 
     # Processes a frame returning True if there is motion.
     def process_frame(self, frame):
-        self.background.process_frame(frame)
-        if self.background.frames < WINDOW_SIZE:
-            self.preview_frames.add(frame)
+        self.preview_frames.add(frame)
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        self.preview_frames_grey.add(frame)
+
+        if self.preview_frames_grey.oldest is None:
             return False
 
         # Filter and get diff from background
         delta = cv2.absdiff(
-            self.preview_frames.current, frame
+            self.preview_frames_grey.oldest, frame
         )  # Get delta from current frame and background
         threshold = cv2.threshold(delta, 25, 255, cv2.THRESH_BINARY)[1]
+        self.background.process_frame(frame, threshold)
+
         erosion_image = cv2.erode(threshold, self.get_kernel())
         erosion_pixels = len(erosion_image[erosion_image > 0])
         # to do find a value that suites the number of pixesl we want to move
-        self.preview_frames.add(frame)
+        self.preview_frames_grey.add(frame)
 
         # Calculate if there was motion in the current frame
-        # TODO Chenage how much is added to the motion_count depending on how big the motion is
+        # TODO Chenage how much ioldests added to the motion_count depending on how big the motion is
         if erosion_pixels > 0:
             self.motion_count += 1
-            self.motion_count = max(self.motion_count, 30)
+            self.motion_count = min(self.motion_count, 30)
         else:
             self.motion_count -= 1
-            self.motion_count = min(self.motion_count, 0)
+            self.motion_count = max(self.motion_count, 0)
 
         # logging.info("motion count is %s", self.motion_count)
         # Check if motion has started or ended
@@ -169,10 +131,18 @@ class Motion:
             self.motion = False
 
         if self.show:
+            cv2.imshow("window", frame)
             cv2.imshow("delta", delta)
             cv2.imshow("threshold", threshold)
             cv2.imshow("erosion_image", erosion_image)
-            cv2.imshow("window", frame)
+            cv2.imshow("background", self.background.background)
+
+            cv2.moveWindow(f"window", 0, 0)
+            cv2.moveWindow(f"delta", 640, 0)
+            cv2.moveWindow(f"erosion_image", 0, 480)
+            cv2.moveWindow(f"threshold", 640, 480)
+            cv2.moveWindow(f"background", 1000, 960)
+
             cv2.waitKey(1)
 
         return self.motion
