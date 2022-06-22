@@ -1,5 +1,3 @@
-from threading import Lock
-
 import numpy as np
 import cv2
 import time
