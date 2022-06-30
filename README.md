@@ -1,42 +1,32 @@
-# trap-ir-camera
-
-## Camera setup process
-
-- Start with latest RPi image.
+## Making a new image from scratch
+- Install latest Raspberry Pi OS Lite (64 bit). Using rpi-imager press ctrl+shift+x to open the extra settings and set WiFi name, country, and password.
+- Insert SD card to Raspberry Pi and power RPi through USB (powering through hat will cause it to restart without attiny installed yet)
+- SSH onto the RPi
 - `sudo apt update`
-- `sudo apt upgrade`
-
-- `sudo raspi-config`
-    - Add bushnet network
-    - Set network to NZ
-    - Enable I2C
-    - Enable camera
-    - Rename to `trap-ir-<id>`
-
-- Reboot after finished with `raspi-cofnig`
+- `sudo apt upgrade -y`
+- Run `raspi-config` to enable camera, i2c
 - `sudo mkdir /etc/cacophony`
-- Install cacophony-config
-- Install/enable attiny-controller
-- Install modemd
-- Install/enable rtc-util
-- `sudo apt install -y gpac`
-- `sudo apt-get install python3-pip`
-- Install salt https://repo.saltproject.io/#raspbian
-- Set master URL in `master: salt.cacophony.org.nz`
-- `sudo vi /etc/salt/minion.d/ports.conf`
-`ports.conf`
-```
-publish_port: 4507
-master_port: 4508
-```
+- `sudo mkdir /etc/salt`
+- Install 
+    - go-config
+    - event-reporter
+    - Management interface from branch ir-camera
+    - RTC
+    - ATTiny controller
+    - device-register and change prefix to trap-ir
+    - modemd 1.2.3
+- `sudo mkdir /media/cp`
+- Add to `/etc/fstab` `LABEL=cp /media/cp auto auto,nofail,noexec,nodev,noatime,nodiratime,umask=000 0 2`
+- restart device
+- Device register shoudl have changed name so scan using sidekcik to see the devices name.
+- `sudo apt install python3-opencv`
+- Install salt and configure to connect to cacophony salt https://repo.saltproject.io/#debian
+- `sudo apt install python3-pip -y`
+- Copy over `ir-camera.service` `main.py` `motion.py` `requirements.txt` 
+- `pip3 install -r requirements.txt`
 
-`LABEL=cp /media/cp auto auto,nofail,noexec,nodev,noatime,nodiratime,umask=000 0 2`
-
-https://linuxize.com/post/how-to-install-opencv-on-raspberry-pi/
-https://pypi.org/project/imutils/
-
-
-`apt-get install python-systemd python3-systemd`
-
-- Copy over files `scp ./ir-camera* pi@trap-ir-<id>.local:` and `scp ./requirements.txt pi@trap-ir-<id>.local:`
-- `sudo pip3 install -r requirements.txt`
+## Making a new image to save
+- Make a new image from scratch.
+- Add to `/lib/systemd/system/salt-minion.service` `ConditionPathExists=/etc/salt/minion_id`
+- Delete `/etc/salt/minion_id`
+- Delete device config
