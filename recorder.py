@@ -4,7 +4,8 @@ from logs import init_logging
 from datetime import datetime
 import socket
 import logging
-#from thermalconfig import ThermalConfig
+
+# from thermalconfig import ThermalConfig
 
 USB_DIR = "/media/cp"
 VIDEO_DIR = os.path.join(USB_DIR, "videos")

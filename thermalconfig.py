@@ -203,7 +203,6 @@ class ThermalConfig:
         )
 
 
-
 @attr.s
 class LocationConfig:
 
