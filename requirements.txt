@@ -1,3 +1,7 @@
 opencv-python
 psutil
 numpy
+attr
+toml
+portalocker
+astral<=1.0,<2.0

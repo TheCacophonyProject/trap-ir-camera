@@ -10,34 +10,14 @@ class Background:
     # update pixels which have shown no movement for 200 frames
     def __init__(self):
         self.background = None
-        # self.background_weight = None
         self.frames = 0
 
     def process_frame(self, frame):
         self.frames += 1
-
         if self.background is None:
             self.background = frame.copy()
-            # self.background_weight = np.zeros((frame.shape), dtype=np.float32)
             return
         self.background = np.minimum(self.background, frame)
-        #
-        # indices = np.where(thresh == 0)
-        # self.background_weight = np.where(
-        #     thresh == 0,
-        #     self.background_weight + 1,
-        #     0,
-        # )
-        # self.background = np.where(
-        #     self.background_weight > Background.STILL_FOR,
-        #     frame,
-        #     self.background,
-        # )
-        # self.background = np.uint8(self.background)
-        # self.background_weight[self.background_weight > Background.STILL_FOR] -= (
-        #     Background.STILL_FOR / 4.0
-        # )
-        # np.clip(self.background_weight, a_min=0, a_max=None)
 
 
 class SlidingWindow:
