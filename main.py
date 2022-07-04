@@ -28,6 +28,7 @@ MAX_FRAMES = 120 * FPS
 FPS = 10
 WINDOW_SIZE = 5 * FPS
 
+VERSION = 2.0
 hostname = socket.gethostname()
 
 
@@ -141,7 +142,7 @@ class Recorder:
 
     def get_out_file(self):
         date_str = datetime.now().strftime("%Y-%m-%d_%H.%M.%S")
-        file_name = f"{date_str}_{hostname}.avi"
+        file_name = f"{date_str}_{hostname}_{VERSION}.avi"
         return os.path.join(VIDEO_DIR, file_name)
 
 
