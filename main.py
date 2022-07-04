@@ -17,7 +17,7 @@ import multiprocessing
 
 MAX_DISK_USAGE_PERCENT = 80
 USB_DIR = "/media/cp"
-VIDEO_DIR = os.path.join(USB_DIR, 'videos')
+VIDEO_DIR = os.path.join(USB_DIR, "videos")
 STILL_DIR = "/var/spool/cptv"
 FPS = 10
 H264_EXT = ".h264"
@@ -37,8 +37,10 @@ def init_logging():
         stream=sys.stderr, level=logging.INFO, format=fmt, datefmt="%Y-%m-%d %H:%M:%S"
     )
 
+
 def need_more_disk_space():
     return psutil.disk_usage(VIDEO_DIR).percent > MAX_DISK_USAGE_PERCENT
+
 
 # Delete everything on the USB drive apart from videos from device in the video directory
 def delete_other_files():
@@ -69,11 +71,12 @@ def parse_args():
         help='a Mp4/avi file to process, or a folder name, or "all" for all files within subdirectories of source folder.',
     )
     args = parser.parse_args()
-    
+
     if args.source:
         args.source = Path(args.source)
     print(f"args f{args}")
     return args
+
 
 def run_recorder(frame_queue):
     init_logging()
@@ -123,7 +126,7 @@ class Recorder:
             self.recording = True
             cv2.imwrite(os.path.join(STILL_DIR, "still.png"), frame)
             previews = self.motion_detector.preview_frames.get_frames()
-            self.writer.write(self.motion_detector.background.background)
+            self.writer.write(self.motion_detector.get_background())
             for f in previews:
                 self.writer.write(f)
         elif (self.recording and not motion and self.length > MIN_FRAMES) or (
@@ -143,19 +146,31 @@ class Recorder:
 
 
 class Background:
-    BACKGROUND_WEIGHT_ADD = 0.001
-    STILL_FOR = 200
-    # update pixels which have shown no movement for 200 frames
+    AVERAGE_OVER = 1000
+
     def __init__(self):
-        self.background = None
+        self._background = None
         self.frames = 0
 
     def process_frame(self, frame):
         self.frames += 1
-        if self.background is None:
-            self.background = frame.copy()
+        if self._background is None:
+            self._background = np.float32(frame.copy())
             return
-        self.background = np.minimum(self.background, frame)
+        if self.frames < Background.AVERAGE_OVER:
+            self._background = (self._background * self.frames + frame) / (
+                self.frames + 1
+            )
+        else:
+            self._background = (
+                self._background * (Background.AVERAGE_OVER - 1) + frame
+            ) / (Background.AVERAGE_OVER)
+
+        self.frames += 1
+
+    @property
+    def background(self):
+        return np.uint8(self._background)
 
 
 class SlidingWindow:
@@ -183,11 +198,11 @@ class SlidingWindow:
             cur = (cur + 1) % self.frame_len
         return frames
 
+
 class Motion:
     def __init__(self):
         self.preview_frames = SlidingWindow(WINDOW_SIZE)
         self.preview_frames_grey = SlidingWindow(WINDOW_SIZE)
-
         self.background = Background()
         self.kernel_trigger = np.ones(
             (15, 15), "uint8"
@@ -198,6 +213,9 @@ class Motion:
         self.motion = False
         self.motion_count = 0
         self.show = False
+
+    def get_background(self):
+        return self.background.background
 
     def get_kernel(self):
         if self.motion:
@@ -225,7 +243,6 @@ class Motion:
         # to do find a value that suites the number of pixesl we want to move
         self.preview_frames_grey.add(frame)
         self.background.process_frame(frame)
-
         # Calculate if there was motion in the current frame
         # TODO Chenage how much ioldests added to the motion_count depending on how big the motion is
         if erosion_pixels > 0:
@@ -260,6 +277,7 @@ class Motion:
 
         return self.motion
 
+
 def main():
     init_logging()
 
@@ -276,10 +294,11 @@ def main():
         args=(frame_queue,),
     )
     p_processor.start()
-
     # Check if USB is properly mounted
     logging.info("checking USB is mounted....")
-    if USB_DIR not in subprocess.check_output('df').decode('utf-8') and os.path.isdir(USB_DIR):
+    if USB_DIR not in subprocess.check_output("df").decode("utf-8") and os.path.isdir(
+        USB_DIR
+    ):
         logging.info(f"USB not mounted at {USB_DIR}")
         sys.exit(f"USB not mounted at {USB_DIR}")
     logging.info("USB is mounted")
