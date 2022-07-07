@@ -192,7 +192,7 @@ def process(source):
         vidcap = cv2.VideoCapture(str(source))
         frame_number = 0
         m = None
-        motion = False
+        has_motion = False
         recording = False
         while True:
             success, image = vidcap.read()
@@ -201,7 +201,7 @@ def process(source):
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             motion.process_frame(gray)
             if motion.motion:
-                motion = True
+                has_motion = True
                 vidcap.release()
                 # return
             # if not recording and motion.motion:
@@ -228,9 +228,9 @@ def process(source):
             vidcap.release()
         except:
             pass
-        if motion:
+        if has_motion:
             logging.info("tagging motion")
-            api.tag_recording(recording_id, motion)
+            api.tag_recording(recording_id, MOTION)
         else:
             logging.info("tagging no motion")
             api.tag_recording(recording_id, NO_MOTION)
