@@ -16,7 +16,7 @@ import multiprocessing
 from logging.handlers import QueueHandler, QueueListener
 
 FPS = 10
-# MOTION = "motion"
+MOTION = "motion"
 NO_MOTION = "no motion"
 import psycopg2
 
@@ -126,7 +126,7 @@ def main():
     file_paths = []
     for folder_path, _, files in os.walk(str(args.source)):
         for name in files:
-            if os.path.splitext(name)[1] in [".avi", ".mp4"]:
+            if True or os.path.splitext(name)[1] in [".avi", ".mp4"]:
                 full_path = os.path.join(folder_path, name)
                 file_paths.append(Path(full_path))
     file_paths.sort()
@@ -167,6 +167,15 @@ def process(source):
             cursor.close()
             return
         recording_id = data[0]
+        cursor.execute(
+            f'select * from "Tags" t where t.what  = \'no motion\'  and  t."RecordingId"  = {recording_id};'
+        )
+        data = cursor.fetchone()
+        print("Tag data for ", recording_id, data)
+        if data is not None:
+            logging.info("Got motion already for %s", recording_id)
+            cursor.close()
+            return
         cursor.close()
         logging.info(source)
         # meta = load_meta(source)
@@ -177,12 +186,13 @@ def process(source):
                 if tag.get("what") == NO_MOTION:
                     logging.info("Already tagged as no motion %s", meta["id"])
                     return
+
         logging.info("Processing %s with id %s", source, recording_id)
         motion = Motion()
         vidcap = cv2.VideoCapture(str(source))
         frame_number = 0
         m = None
-        motions = []
+        motion = False
         recording = False
         while True:
             success, image = vidcap.read()
@@ -190,16 +200,20 @@ def process(source):
                 break
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             motion.process_frame(gray)
-            if not recording and motion.motion:
-                m = MotionLogger(frame_number)
-                logging.info("Motion detected %s", frame_number)
-                recording = True
-            elif recording and not motion.motion:
-                logging.info("Motion Stopped")
-                m.stop(frame_number)
-                motions.append(m)
-                recording = False
-                m = None
+            if motion.motion:
+                motion = True
+                vidcap.release()
+                # return
+            # if not recording and motion.motion:
+            #     m = MotionLogger(frame_number)
+            #     logging.info("Motion detected %s", frame_number)
+            #     recording = True
+            # elif recording and not motion.motion:
+            #     logging.info("Motion Stopped")
+            #     m.stop(frame_number)
+            #     motions.append(m)
+            #     recording = False
+            #     m = None
 
             # if motion.motion_count > 0:
             # cv2.imshow(f"background", motion.background.get())
@@ -210,14 +224,16 @@ def process(source):
             # cv2.waitKey()
 
             frame_number += 1
-        if m is not None:
-            m.stop(frame_number)
-            motions.append(m)
-
-        if len(motions) == 0:
+        try:
+            vidcap.release()
+        except:
+            pass
+        if motion:
+            logging.info("tagging motion")
+            api.tag_recording(recording_id, motion)
+        else:
             logging.info("tagging no motion")
             api.tag_recording(recording_id, NO_MOTION)
-
         # for m in motions:
         #     logging.info("Motion %s ", m)
     except:
