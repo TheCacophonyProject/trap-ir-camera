@@ -168,7 +168,7 @@ def process(source):
             return
         recording_id = data[0]
         cursor.execute(
-            f'select * from "Tags" t where t.what  = \'no motion\'  and  t."RecordingId"  = {recording_id};'
+            f"select * from \"Tags\" t where (t.what  = 'no motion' or t.what  = 'motion')    and  t.\"RecordingId\"  = {recording_id};"
         )
         data = cursor.fetchone()
         print("Tag data for ", recording_id, data)
