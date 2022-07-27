@@ -23,7 +23,7 @@
 - Install salt and configure to connect to cacophony salt https://repo.saltproject.io/#debian
 - `sudo apt install python3-pip -y`
 - Copy over `ir-camera.service` `main.py` `motion.py` `requirements.txt` 
-- `pip3 install -r requirements.txt`
+- `sudo pip3 install -r requirements.txt`
 
 ## Making a new image to save
 - Make a new image from scratch.

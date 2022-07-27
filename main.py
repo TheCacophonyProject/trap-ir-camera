@@ -18,11 +18,18 @@ import multiprocessing
 MAX_DISK_USAGE_PERCENT = 80
 USB_DIR = "/media/cp"
 VIDEO_DIR = os.path.join(USB_DIR, "videos")
+TMP_DIR = "/tmp"
+VIDEO_DIR = "/var/spool/cptv"
 STILL_DIR = "/var/spool/cptv"
 FPS = 10
 H264_EXT = ".h264"
 RESOLUTION = (640, 480)
-FOURCC = cv2.VideoWriter_fourcc(*"XVID")
+#FOURCC = cv2.VideoWriter_fourcc(*"XVID")
+#FOURCC = cv2.VideoWriter_fourcc(*'mp4v')
+#FOURCC = cv2.VideoWriter_fourcc('V','P','8','0')
+#VIDEO_EXT = "avi"
+FOURCC = cv2.VideoWriter_fourcc(*'avc1')
+VIDEO_EXT = ".mp4"
 MIN_FRAMES = 10 * FPS
 MAX_FRAMES = 120 * FPS
 FPS = 10
@@ -38,31 +45,8 @@ def init_logging():
         stream=sys.stderr, level=logging.INFO, format=fmt, datefmt="%Y-%m-%d %H:%M:%S"
     )
 
-
 def need_more_disk_space():
     return psutil.disk_usage(VIDEO_DIR).percent > MAX_DISK_USAGE_PERCENT
-
-
-# Delete everything on the USB drive apart from videos from device in the video directory
-def delete_other_files():
-    # Delete directories apart from the video_dir
-    files = os.listdir(USB_DIR)
-    for f in files:
-        p = os.path.join(USB_DIR, f)
-        if os.path.basename(p) != os.path.basename(VIDEO_DIR):
-            if os.path.isfile(p):
-                os.remove(p)
-            else:
-                shutil.rmtree(p)
-
-    # Delete all files that are not recording from this device
-    files = glob.glob(os.path.join(VIDEO_DIR, "*"))
-    for f in files:
-        if os.path.isfile(f) and not f.endswith(f"{hostname}.avi"):
-            os.remove(f)
-        elif os.path.isdir(f):
-            shutil.rmtree(f)
-
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -97,7 +81,6 @@ def run_recorder(frame_queue):
             break
         r.process_frame(frame)
 
-
 class Recorder:
     def __init__(self, res_x, res_y):
         self.motion_detector = Motion()
@@ -116,13 +99,13 @@ class Recorder:
 
     def process_frame(self, frame):
         motion = self.motion_detector.process_frame(frame.copy())
-
         if not self.recording and motion:
             self.length = 0
-            out_file = self.get_out_file()
-            logging.info(f"Starting new recording: {out_file}")
+            self.filename = self.get_file_name()
+            self.tmp_file = os.path.join(TMP_DIR, self.filename)
+            logging.info(f"Starting new recording: {self.tmp_file}")
             self.writer = cv2.VideoWriter(
-                out_file, FOURCC, FPS, (self.res_x, self.res_y)
+                self.tmp_file, FOURCC, FPS, (self.res_x, self.res_y)
             )
             self.recording = True
             cv2.imwrite(os.path.join(STILL_DIR, "still.png"), frame)
@@ -135,16 +118,17 @@ class Recorder:
         ):
             logging.info("Stopping recording")
             self.writer.release()
+            out_file = os.path.join(VIDEO_DIR, self.filename)
+            logging.info(f"Saving file to {out_file}")
+            os.rename(self.tmp_file, out_file)
             self.recording = False
         elif self.recording:
             self.writer.write(frame)
             self.length += 1
 
-    def get_out_file(self):
+    def get_file_name(self):
         date_str = datetime.now().strftime("%Y-%m-%d_%H.%M.%S")
-        file_name = f"{date_str}_{hostname}_{VERSION}.avi"
-        return os.path.join(VIDEO_DIR, file_name)
-
+        return f"{date_str}_{hostname}_{VERSION}.{VIDEO_EXT}"
 
 class Background:
     AVERAGE_OVER = 1000
@@ -198,7 +182,6 @@ class SlidingWindow:
             frames.append(self.frames[cur])
             cur = (cur + 1) % self.frame_len
         return frames
-
 
 class Motion:
     def __init__(self):
@@ -295,19 +278,6 @@ def main():
         args=(frame_queue,),
     )
     p_processor.start()
-    # Check if USB is properly mounted
-    logging.info("checking USB is mounted....")
-    if USB_DIR not in subprocess.check_output("df").decode("utf-8") and os.path.isdir(
-        USB_DIR
-    ):
-        logging.info(f"USB not mounted at {USB_DIR}")
-        sys.exit(f"USB not mounted at {USB_DIR}")
-    logging.info("USB is mounted")
-
-    # Remove old recordings
-    logging.info("Deleting old recordings from USB")
-    delete_other_files()
-    logging.info("Old recordings deleted")
 
     # Start video capture
     logging.info("Starting video capture")
