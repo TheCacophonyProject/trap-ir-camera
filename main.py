@@ -11,6 +11,7 @@ import glob
 import argparse
 import numpy as np
 import subprocess
+import time
 
 from pathlib import Path
 import multiprocessing
@@ -29,11 +30,12 @@ RESOLUTION = (640, 480)
 #FOURCC = cv2.VideoWriter_fourcc('V','P','8','0')
 #VIDEO_EXT = "avi"
 FOURCC = cv2.VideoWriter_fourcc(*'avc1')
-VIDEO_EXT = ".mp4"
+VIDEO_EXT = "mp4"
 MIN_FRAMES = 10 * FPS
 MAX_FRAMES = 120 * FPS
 FPS = 10
 WINDOW_SIZE = 5 * FPS
+PRINT_WAIT_TIMES = True
 
 VERSION = 2.0
 hostname = socket.gethostname()
@@ -127,7 +129,7 @@ class Recorder:
             self.length += 1
 
     def get_file_name(self):
-        date_str = datetime.now().strftime("%Y-%m-%d_%H.%M.%S")
+        date_str = datetime.utcnow().strftime("%Y-%m-%d_%H.%M.%S")
         return f"{date_str}_{hostname}_{VERSION}.{VIDEO_EXT}"
 
 class Background:
@@ -272,6 +274,8 @@ def main():
         cap = cv2.VideoCapture(str(args.source))
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    #FPS = int(cap.get(cv2.CAP_PROP_FPS))
+    #print(FPS)
     frame_queue = multiprocessing.Queue()
     p_processor = multiprocessing.Process(
         target=run_recorder,
@@ -283,8 +287,22 @@ def main():
     logging.info("Starting video capture")
     headers = {"width": width, "height": height}
     frame_queue.put(headers)
+    frame_count = 0.0
+    start_time = time.time()
+    wait_times = []
     while True:
+        # Wait for next capture.
+        wait_time = max(0, start_time + frame_count/FPS - time.time())
+        time.sleep(wait_time)
+        wait_times.append(wait_time)
         returned, frame = cap.read()
+        frame_count+=1
+        if frame_count%10*FPS == 0 and PRINT_WAIT_TIMES:
+            print("wait times between frames:")
+            print("Max:", max(wait_times))
+            print("Min:", min(wait_times))
+            print("Avg:", sum(wait_times)/len(wait_times))
+            wait_times = []
         if not returned:
             logging.info("no frame from video capture")
             break
@@ -293,7 +311,6 @@ def main():
     frame_queue.put("DONE")
     p_processor.join()
     cv2.destroyAllWindows()
-
 
 if __name__ == "__main__":
     main()
