@@ -25,11 +25,11 @@ STILL_DIR = "/var/spool/cptv"
 FPS = 10
 H264_EXT = ".h264"
 RESOLUTION = (640, 480)
-#FOURCC = cv2.VideoWriter_fourcc(*"XVID")
-#FOURCC = cv2.VideoWriter_fourcc(*'mp4v')
-#FOURCC = cv2.VideoWriter_fourcc('V','P','8','0')
-#VIDEO_EXT = "avi"
-FOURCC = cv2.VideoWriter_fourcc(*'avc1')
+# FOURCC = cv2.VideoWriter_fourcc(*"XVID")
+# FOURCC = cv2.VideoWriter_fourcc(*'mp4v')
+# FOURCC = cv2.VideoWriter_fourcc('V','P','8','0')
+# VIDEO_EXT = "avi"
+FOURCC = cv2.VideoWriter_fourcc(*"avc1")
 VIDEO_EXT = "mp4"
 MIN_FRAMES = 10 * FPS
 MAX_FRAMES = 120 * FPS
@@ -47,8 +47,10 @@ def init_logging():
         stream=sys.stderr, level=logging.INFO, format=fmt, datefmt="%Y-%m-%d %H:%M:%S"
     )
 
+
 def need_more_disk_space():
     return psutil.disk_usage(VIDEO_DIR).percent > MAX_DISK_USAGE_PERCENT
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -82,6 +84,7 @@ def run_recorder(frame_queue):
             r.close()
             break
         r.process_frame(frame)
+
 
 class Recorder:
     def __init__(self, res_x, res_y):
@@ -132,6 +135,7 @@ class Recorder:
         date_str = datetime.utcnow().strftime("%Y-%m-%d_%H.%M.%S")
         return f"{date_str}_{hostname}_{VERSION}.{VIDEO_EXT}"
 
+
 class Background:
     AVERAGE_OVER = 1000
 
@@ -140,7 +144,6 @@ class Background:
         self.frames = 0
 
     def process_frame(self, frame):
-        self.frames += 1
         if self._background is None:
             self._background = np.float32(frame.copy())
             return
@@ -184,6 +187,7 @@ class SlidingWindow:
             frames.append(self.frames[cur])
             cur = (cur + 1) % self.frame_len
         return frames
+
 
 class Motion:
     def __init__(self):
@@ -274,8 +278,8 @@ def main():
         cap = cv2.VideoCapture(str(args.source))
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    #FPS = int(cap.get(cv2.CAP_PROP_FPS))
-    #print(FPS)
+    # FPS = int(cap.get(cv2.CAP_PROP_FPS))
+    # print(FPS)
     frame_queue = multiprocessing.Queue()
     p_processor = multiprocessing.Process(
         target=run_recorder,
@@ -292,16 +296,16 @@ def main():
     wait_times = []
     while True:
         # Wait for next capture.
-        wait_time = max(0, start_time + frame_count/FPS - time.time())
+        wait_time = max(0, start_time + frame_count / FPS - time.time())
         time.sleep(wait_time)
         wait_times.append(wait_time)
         returned, frame = cap.read()
-        frame_count+=1
-        if frame_count%10*FPS == 0 and PRINT_WAIT_TIMES:
+        frame_count += 1
+        if frame_count % 10 * FPS == 0 and PRINT_WAIT_TIMES:
             print("wait times between frames:")
             print("Max:", max(wait_times))
             print("Min:", min(wait_times))
-            print("Avg:", sum(wait_times)/len(wait_times))
+            print("Avg:", sum(wait_times) / len(wait_times))
             wait_times = []
         if not returned:
             logging.info("no frame from video capture")
@@ -311,6 +315,7 @@ def main():
     frame_queue.put("DONE")
     p_processor.join()
     cv2.destroyAllWindows()
+
 
 if __name__ == "__main__":
     main()
